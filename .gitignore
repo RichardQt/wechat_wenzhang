@@ -1,0 +1,12 @@
+wechat_articles/
+
+wechat_daily_articles/
+
+*.log
+
+*.txt
+
+__pycache__/
+*.pyc
+
+*.pkl
