@@ -11,17 +11,17 @@
  Target Server Version : 80043 (8.0.43)
  File Encoding         : 65001
 
- Date: 11/09/2025 15:27:41
+ Date: 25/09/2025 19:10:13
 */
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- ----------------------------
--- Table structure for fx_article_records_new_all
+-- Table structure for fx_article_records
 -- ----------------------------
-DROP TABLE IF EXISTS `fx_article_records_new_all`;
-CREATE TABLE `fx_article_records_new_all`  (
+DROP TABLE IF EXISTS `fx_article_records`;
+CREATE TABLE `fx_article_records`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '自增主键',
   `crawl_time` datetime NOT NULL COMMENT '爬取时间',
   `crawl_channel` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '爬取渠道（官网、微信公众号等）',
@@ -38,9 +38,9 @@ CREATE TABLE `fx_article_records_new_all`  (
   `unit_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '单位名称',
   `thumbs_count` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '点赞量',
   `comments` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '评论量',
-  `analysis` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '是否进行普法分析判断 true和false',
-  PRIMARY KEY (`id` DESC) USING BTREE,
+  `analysis` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '是否进行普法分析判断',
+  PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_article_url`(`article_url`(255) ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 18242 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '文章记录表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 101174 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '文章记录表' ROW_FORMAT = DYNAMIC;
 
 SET FOREIGN_KEY_CHECKS = 1;

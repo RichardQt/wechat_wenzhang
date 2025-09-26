@@ -5,7 +5,7 @@
 微信公众号爬虫 - 定时任务
 =======================
 
-在指定时间执行一次爬虫任务
+在指定时间执行一次爬虫任务-----测试的定时任务
 """
 
 import time
@@ -22,16 +22,22 @@ class ScheduledTask:
         """初始化"""
         self.script_dir = Path(__file__).parent
         self.python_exe = self.script_dir / "venv" / "Scripts" / "python.exe"
-        self.start_script = self.script_dir / "start.py"
+        self.start_script = self.script_dir / "test_shedu.py"
         
-    def wait_until_target_time(self, target_hour=0, target_minute=1):
+    def wait_until_target_time(self, target_hour=10, target_minute=10):
         """等待到指定时间"""
         now = datetime.now()
         
-        # 计算明天的目标时间
-        tomorrow = now.date() + timedelta(days=1)
-        target_time = datetime.combine(tomorrow, datetime.min.time())
+        # 计算今天的目标时间
+        today = now.date()
+        target_time = datetime.combine(today, datetime.min.time())
         target_time = target_time.replace(hour=target_hour, minute=target_minute)
+        
+        # 如果目标时间已过，则设置为明天的同一时间
+        if target_time <= now:
+            tomorrow = now.date() + timedelta(days=1)
+            target_time = datetime.combine(tomorrow, datetime.min.time())
+            target_time = target_time.replace(hour=target_hour, minute=target_minute)
         
         # 计算等待时间
         wait_seconds = (target_time - now).total_seconds()
@@ -116,7 +122,7 @@ class ScheduledTask:
             logger.error(f"执行爬虫任务时发生异常: {e}")
             return False
     
-    def run(self, target_hour=0, target_minute=1):
+    def run(self, target_hour=10, target_minute=10):
         """运行定时任务"""
         try:
             # 等待到目标时间
@@ -145,8 +151,8 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description="微信公众号爬虫定时任务")
-    parser.add_argument("--hour", type=int, default=0, help="执行小时 (0-23)")
-    parser.add_argument("--minute", type=int, default=1, help="执行分钟 (0-59)")
+    parser.add_argument("--hour", type=int, default=10, help="执行小时 (0-23)")
+    parser.add_argument("--minute", type=int, default=10, help="执行分钟 (0-59)")
     parser.add_argument("--now", action="store_true", help="立即执行任务")
     
     args = parser.parse_args()
