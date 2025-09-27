@@ -1,0 +1,27 @@
+{
+  "database": {
+    "host": "127.0.0.1",
+    "port": 3306,
+    "user": "root",
+    "password": "123456",
+    "database": "faxuan"
+  },
+  "api": {
+    "key": "JZL12609e8dba9d11e8",
+    "verify_code": "",
+    "base_url": "https://www.dajiala.com"
+  },
+  "days_to_check": 7,
+  "batch_size": 50,
+  "max_retries": 3,
+  "enabled": true,
+  "schedule": {
+    "hour": 6,
+    "minute": 0
+  },
+  "logging": {
+    "level": "INFO",
+    "max_log_files": 30,
+    "log_file": "logs/reading_updater.log"
+  }
+}
