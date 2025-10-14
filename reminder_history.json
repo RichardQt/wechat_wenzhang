@@ -1,0 +1,9 @@
+{
+  "current_token_hash": "7b3ad64ce6119d808f94716890f53811",
+  "last_pre_expiry_reminder": null,
+  "last_expired_reminder": "2025-10-13T12:34:54.360469",
+  "reminder_count": {
+    "pre_expiry": 0,
+    "expired": 1
+  }
+}

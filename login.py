@@ -99,17 +99,17 @@ class WeChatSpiderLogin:
                     """定期提醒用户扫码"""
                     count = 0
                     while not reminder_stop.is_set():
-                        # 每30秒提醒一次
-                        if reminder_stop.wait(30):
+                        # 每5小时提醒一次
+                        if reminder_stop.wait(5 * 3600):  # 5小时 = 18000秒
                             break
                         count += 1
-                        elapsed_minutes = count * 0.5
-                        logger.warning(f"⏰ 提醒：已等待 {elapsed_minutes:.1f} 分钟，请尽快扫码登录！")
+                        elapsed_hours = count * 5
+                        logger.warning(f"⏰ 提醒：已等待 {elapsed_hours} 小时，请尽快扫码登录！")
                         logger.info("💡 如果二维码已过期，请刷新浏览器页面获取新的二维码")
                         
-                        # 每5分钟（10次提醒）后给出更强烈的提醒
-                        if count % 10 == 0:
-                            logger.error(f"⚠️⚠️⚠️ 重要提醒：已等待 {elapsed_minutes:.0f} 分钟！")
+                        # 每10小时（2次提醒）后给出更强烈的提醒
+                        if count % 2 == 0:
+                            logger.error(f"⚠️⚠️⚠️ 重要提醒：已等待 {elapsed_hours} 小时！")
                             logger.error("请立即在浏览器窗口中扫码登录，否则爬虫无法继续运行！")
                             logger.info("如需取消，请按 Ctrl+C 终止程序")
                 

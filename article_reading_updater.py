@@ -119,7 +119,7 @@ class ArticleReadingUpdater:
                 # 查询条件：
                 # 1. 是普法文章 (fx_education_articles.type_class = '1')
                 # 2. 在指定时间范围内
-                # 3. 阅读量为空或点赞量为空或喜欢量为空
+                # 3. 有有效的文章URL
                 sql = """
                 SELECT 
                     ar.id,
@@ -139,7 +139,6 @@ class ArticleReadingUpdater:
                   AND ar.publish_time <= %s
                   AND ar.article_url IS NOT NULL 
                   AND ar.article_url != ''
-                  AND (ar.view_count IS NULL OR ar.likes IS NULL OR ar.thumbs_count IS NULL)
                 ORDER BY ar.publish_time DESC
                 """
                 

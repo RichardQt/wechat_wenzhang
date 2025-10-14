@@ -132,25 +132,35 @@ class DatabaseManager:
             logger.error(f"检查文章URL是否存在时出错: {e}")
             return False
     
-    def check_article_exists_by_title(self, title: str, unit_name: str) -> bool:
+    def check_article_exists_by_title(self, title: str, unit_name: str, publish_time: datetime = None) -> bool:
         """
         检查文章是否已存在（通过标题和单位名称）
+        只对近7天内的文章进行去重检查
         
         Args:
             title: 文章标题
             unit_name: 单位名称
+            publish_time: 文章发布时间（可选，用于判断是否在7天内）
             
         Returns:
             bool: 如果文章存在返回True，否则返回False
         """
         try:
             with self.connection.cursor() as cursor:
-                sql = """SELECT id FROM fx_article_records 
-                         WHERE article_title = %s AND unit_name = %s LIMIT 1"""
-                cursor.execute(sql, (title, unit_name))
+                # 计算7天前的时间
+                from datetime import timedelta
+                seven_days_ago = datetime.now() - timedelta(days=7)
+                
+                # 只查询近7天内的相同标题和单位名称的文章
+                sql = """SELECT id, publish_time FROM fx_article_records 
+                         WHERE article_title = %s 
+                         AND unit_name = %s 
+                         AND publish_time >= %s 
+                         LIMIT 1"""
+                cursor.execute(sql, (title, unit_name, seven_days_ago))
                 result = cursor.fetchone()
                 if result:
-                    logger.debug(f"文章标题已存在: {title} (单位: {unit_name})")
+                    logger.debug(f"文章标题已存在（近7天内）: {title} (单位: {unit_name}, 发布时间: {result.get('publish_time')})")
                 return result is not None
         except Exception as e:
             logger.error(f"检查文章标题是否存在时出错: {e}")
@@ -184,11 +194,6 @@ class DatabaseManager:
                 logger.info(f"文章URL已存在，跳过: {title}")
                 return False
             
-            # 检查文章标题是否已存在（标题去重）
-            if title and self.check_article_exists_by_title(title, unit_name):
-                logger.info(f"文章标题已存在，跳过: {title} (单位: {unit_name})")
-                return False
-            
             # 准备数据
             current_time = datetime.now()
             publish_time = article_data.get('publish_time', current_time)
@@ -201,6 +206,11 @@ class DatabaseManager:
                     publish_time = datetime.strptime(publish_time, "%Y-%m-%d %H:%M:%S")
                 except:
                     publish_time = current_time
+            
+            # 检查文章标题是否已存在（标题去重，只对近7天内的文章）
+            if title and self.check_article_exists_by_title(title, unit_name, publish_time):
+                logger.info(f"文章标题已存在（近7天内），跳过: {title} (单位: {unit_name})")
+                return False
             
             article_id = self.generate_article_id(publish_time)
             

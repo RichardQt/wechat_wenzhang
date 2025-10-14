@@ -1,0 +1,49 @@
+
+{
+  "_注释1": "=== 邮件配置文件 ===",
+  "_注释2": "本文件用于配置邮件发送参数，请根据实际情况填写",
+  "_注释3": "重要提示：请不要将包含真实密码的配置文件上传到公开代码仓库",
+  
+  "_发件人配置": "=== 发件人邮箱配置 ===",
+  "from_email": "your_qq_number@qq.com",
+  "_from_email说明": "发件人邮箱地址，示例：123456789@qq.com",
+  
+  "password": "your_authorization_code_here",
+  "_password说明1": "【重要】这里填写的是邮箱授权码，不是QQ密码！",
+  "_password说明2": "QQ邮箱授权码获取步骤：",
+  "_password说明3": "1. 登录QQ邮箱网页版 (mail.qq.com)",
+  "_password说明4": "2. 点击顶部【设置】→【账户】",
+  "_password说明5": "3. 找到【POP3/IMAP/SMTP/Exchange/CardDAV/CalDAV服务】",
+  "_password说明6": "4. 开启【IMAP/SMTP服务】",
+  "_password说明7": "5. 点击【生成授权码】，按提示操作获取16位授权码",
+  "_password说明8": "6. 将获取的授权码填写到password字段（例如：abcdefghijklmnop）",
+  
+  "_服务器配置": "=== SMTP服务器配置 ===",
+  "smtp_server": "smtp.qq.com",
+  "_smtp_server说明": "SMTP服务器地址，QQ邮箱固定为：smtp.qq.com",
+  
+  "smtp_port": 587,
+  "_smtp_port说明1": "SMTP服务器端口号，QQ邮箱可选：",
+  "_smtp_port说明2": "- 587端口：TLS加密（推荐）",
+  "_smtp_port说明3": "- 465端口：SSL加密",
+  "_smtp_port说明4": "- 25端口：普通连接（可能被运营商封禁）",
+  
+  "_收件人配置": "=== 收件人邮箱配置 ===",
+  "to_email": "recipient@example.com",
+  "_to_email说明1": "收件人邮箱地址，可以是任何有效的邮箱",
+  "_to_email说明2": "支持多个收件人时，可改为数组格式：[\"email1@example.com\", \"email2@example.com\"]",
+  
+  "_其他常用邮箱配置参考": "=== 其他常用邮箱SMTP配置 ===",
+  "_163邮箱": "SMTP服务器：smtp.163.com，端口：465/587/25",
+  "_126邮箱": "SMTP服务器：smtp.126.com，端口：465/587/25",
+  "_Gmail邮箱": "SMTP服务器：smtp.gmail.com，端口：587/465",
+  "_Outlook邮箱": "SMTP服务器：smtp.office365.com，端口：587",
+  "_新浪邮箱": "SMTP服务器：smtp.sina.com，端口：465/587/25",
+  
+  "_使用提示": "=== 使用提示 ===",
+  "_提示1": "首次使用前请确保已开启邮箱的SMTP服务",
+  "_提示2": "建议使用专门的邮箱账号用于程序发送邮件",
+  "_提示3": "请妥善保管授权码，避免泄露",
+  "_提示4": "如遇到发送失败，请检查：防火墙设置、网络连接、授权码是否正确",
+  
+}
