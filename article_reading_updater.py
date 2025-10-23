@@ -109,6 +109,11 @@ class ArticleReadingUpdater:
         """
         if days is None:
             days = self.days_to_check
+        
+        # 确保数据库已连接
+        if not self.db.connection:
+            logger.error("数据库未连接，无法查询文章")
+            return []
             
         try:
             with self.db.connection.cursor() as cursor:
