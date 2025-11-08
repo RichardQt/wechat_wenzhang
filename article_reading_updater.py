@@ -97,12 +97,13 @@ class ArticleReadingUpdater:
         except Exception as e:
             logger.error(f"配置文件保存失败: {e}")
     
-    def get_articles_need_update(self, days: int = None) -> List[Dict]:
+    def get_articles_need_update(self, days: int = None, only_empty: bool = False) -> List[Dict]:
         """
         获取需要更新阅读量的普法文章
         
         Args:
             days: 检查的天数，默认使用配置值
+            only_empty: 是否只获取阅读量为空的文章
             
         Returns:
             List[Dict]: 需要更新的文章列表
@@ -121,9 +122,81 @@ class ArticleReadingUpdater:
                 end_date = datetime.now()
                 start_date = end_date - timedelta(days=days)
                 
-                # 查询条件：
+                # 基础查询条件：
                 # 1. 是普法文章 (fx_education_articles.type_class = '1')
                 # 2. 在指定时间范围内
+                # 3. 有有效的文章URL
+                base_conditions = """
+                WHERE ea.type_class = '1'
+                  AND ar.publish_time >= %s
+                  AND ar.publish_time <= %s
+                  AND ar.article_url IS NOT NULL 
+                  AND ar.article_url != ''
+                """
+                
+                # 如果只获取阅读量为空的文章，添加额外条件
+                if only_empty:
+                    base_conditions += """
+                  AND (ar.view_count IS NULL 
+                       OR ar.likes IS NULL 
+                       OR ar.thumbs_count IS NULL)
+                    """
+                
+                sql = f"""
+                SELECT 
+                    ar.id,
+                    ar.article_id,
+                    ar.article_title,
+                    ar.article_url,
+                    ar.publish_time,
+                    ar.unit_name,
+                    ar.view_count,
+                    ar.likes,
+                    ar.thumbs_count,
+                    ea.type_class
+                FROM fx_article_records ar
+                INNER JOIN fx_education_articles ea ON ar.article_id = ea.article_id
+                {base_conditions}
+                ORDER BY ar.publish_time DESC
+                """
+                
+                cursor.execute(sql, (start_date, end_date))
+                articles = cursor.fetchall()
+                
+                article_type = "阅读量为空的" if only_empty else ""
+                logger.info(f"查询到 {len(articles)} 篇需要更新{article_type}普法文章 "
+                           f"(时间范围: {start_date.strftime('%Y-%m-%d')} 到 {end_date.strftime('%Y-%m-%d')})")
+                
+                return articles
+                
+        except Exception as e:
+            logger.error(f"查询需要更新的文章时出错: {e}")
+            return []
+    
+    def get_articles_for_specific_day(self, target_date: datetime) -> List[Dict]:
+        """
+        获取指定日期发布的普法文章
+        
+        Args:
+            target_date: 目标日期
+            
+        Returns:
+            List[Dict]: 该日期发布的文章列表
+        """
+        # 确保数据库已连接
+        if not self.db.connection:
+            logger.error("数据库未连接，无法查询文章")
+            return []
+            
+        try:
+            with self.db.connection.cursor() as cursor:
+                # 计算当天的开始和结束时间
+                day_start = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
+                day_end = target_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+                
+                # 查询条件：
+                # 1. 是普法文章 (fx_education_articles.type_class = '1')
+                # 2. 发布时间在目标日期当天
                 # 3. 有有效的文章URL
                 sql = """
                 SELECT 
@@ -147,16 +220,16 @@ class ArticleReadingUpdater:
                 ORDER BY ar.publish_time DESC
                 """
                 
-                cursor.execute(sql, (start_date, end_date))
+                cursor.execute(sql, (day_start, day_end))
                 articles = cursor.fetchall()
                 
-                logger.info(f"查询到 {len(articles)} 篇需要更新阅读量的普法文章 "
-                           f"(时间范围: {start_date.strftime('%Y-%m-%d')} 到 {end_date.strftime('%Y-%m-%d')})")
+                logger.info(f"查询到 {len(articles)} 篇需要更新的普法文章 "
+                           f"(发布日期: {target_date.strftime('%Y-%m-%d')})")
                 
                 return articles
                 
         except Exception as e:
-            logger.error(f"查询需要更新的文章时出错: {e}")
+            logger.error(f"查询指定日期文章时出错: {e}")
             return []
     
     def update_article_reading_data(self, article: Dict) -> bool:
@@ -284,15 +357,47 @@ class ArticleReadingUpdater:
             logger.info(f"任务开始时间: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
             logger.info(f"检查范围: 近 {self.days_to_check} 天的普法文章")
             
-            # 获取需要更新的文章
-            articles = self.get_articles_need_update()
+            # 第一步：获取近7天内阅读量为空的文章（只填充）
+            logger.info("\n" + "="*60)
+            logger.info("📝 第一步：填充近7天内阅读量为空的文章")
+            logger.info("="*60)
+            empty_articles = self.get_articles_need_update(only_empty=True)
             
-            if not articles:
-                logger.info("没有需要更新的文章，任务完成")
+            # 第二步：获取往前推6天那一天的所有文章（强制更新）
+            six_days_ago = datetime.now() - timedelta(days=6)
+            logger.info("\n" + "="*60)
+            logger.info(f"📅 第二步：更新往前推6天的文章 (发布日期: {six_days_ago.strftime('%Y-%m-%d')})")
+            logger.info("="*60)
+            six_days_ago_articles = self.get_articles_for_specific_day(six_days_ago)
+            
+            # 合并文章列表，去重（基于article_id）
+            all_articles = empty_articles.copy() if empty_articles else []
+            existing_article_ids = {article['article_id'] for article in all_articles}
+            
+            # 添加前6天的文章（去重）
+            additional_count = 0
+            for article in six_days_ago_articles:
+                if article['article_id'] not in existing_article_ids:
+                    all_articles.append(article)
+                    existing_article_ids.add(article['article_id'])
+                    additional_count += 1
+            
+            if not all_articles:
+                logger.info("没有需要处理的文章，任务完成")
                 return True
             
+            logger.info("\n" + "="*60)
+            logger.info("📊 任务汇总")
+            logger.info("="*60)
+            logger.info(f"近{self.days_to_check}天阅读量为空的文章(填充): {len(empty_articles)} 篇")
+            logger.info(f"往前推6天({six_days_ago.strftime('%Y-%m-%d')})的文章(更新): {len(six_days_ago_articles)} 篇")
+            logger.info(f"去重后实际需要处理: {len(all_articles)} 篇")
+            logger.info(f"  - 其中需要填充: {len(empty_articles)} 篇")
+            logger.info(f"  - 其中需要更新: {additional_count} 篇")
+            logger.info("")
+            
             # 批量更新
-            success_count, total_count = self.batch_update_articles(articles)
+            success_count, total_count = self.batch_update_articles(all_articles)
             
             # 统计结果
             end_time = datetime.now()
@@ -306,11 +411,11 @@ class ArticleReadingUpdater:
             logger.info(f"处理结果: 成功 {success_count}/{total_count} 篇")
             
             if success_count > 0:
-                logger.success(f"✅ 成功更新了 {success_count} 篇文章的阅读量数据")
+                logger.success(f"✅ 成功处理了 {success_count} 篇文章的阅读量数据")
             
             if success_count < total_count:
                 failed_count = total_count - success_count
-                logger.warning(f"⚠️  有 {failed_count} 篇文章更新失败")
+                logger.warning(f"⚠️  有 {failed_count} 篇文章处理失败")
             
             return True
             

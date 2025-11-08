@@ -11,3 +11,5 @@ __pycache__/
 
 *.pkl
 email_config.json
+reading_updater_config.json
+.gitignore

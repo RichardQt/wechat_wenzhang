@@ -12,7 +12,7 @@ import sys
 import os
 import argparse
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # 添加项目根目录到Python路径
 project_root = Path(__file__).parent
@@ -20,6 +20,7 @@ sys.path.insert(0, str(project_root))
 
 from article_reading_updater import ArticleReadingUpdater
 from reading_update_scheduler import ReadingUpdateScheduler
+from theme_reading_updater import ThemeReadingUpdater
 from spider.log.utils import logger
 
 
@@ -53,7 +54,7 @@ def run_immediate_update(config_file: str, days: int = None):
         return 1
 
 
-def run_scheduler(config_file: str, hour: int = 6, minute: int = 0):
+def run_scheduler(config_file: str, hour: int = 18, minute: int = 30):
     """运行定时调度器"""
     logger.info("⏰ 定时调度器模式")
     
@@ -139,6 +140,103 @@ def test_api_connection(config_file: str):
         return 1
 
 
+def check_theme_end(config_file: str):
+    """检查明天是否有法律主题结束"""
+    logger.info("🎯 法律主题检查模式")
+    
+    updater = ThemeReadingUpdater(config_file)
+    
+    if not updater.db.connect():
+        logger.error("数据库连接失败")
+        return 1
+    
+    try:
+        theme = updater.get_upcoming_theme_end()
+        
+        if theme:
+            print("\n" + "="*60)
+            print("✅ 明天是法律主题结束日")
+            print("="*60)
+            print(f"主题名称: {theme['theme_name']}")
+            print(f"主题年份: {theme['year']}")
+            print(f"开始日期: {theme['start_date']}")
+            print(f"结束日期: {theme['end_date']}")
+            print(f"主题ID: {theme['id']}")
+            print(f"报告生成: {'已生成' if theme['is_generated'] else '未生成'}")
+            print("="*60)
+            
+            # 计算主题天数
+            days = (theme['end_date'] - theme['start_date']).days + 1
+            print(f"\n📅 主题持续时间: {days} 天")
+            print(f"💡 将更新该期间内所有普法文章的阅读量")
+            
+            return 0
+        else:
+            print("\n" + "="*60)
+            print("❌ 明天不是任何法律主题的结束日")
+            print("="*60)
+            tomorrow = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+            print(f"明天日期: {tomorrow}")
+            print("无需执行法律主题更新任务")
+            print("="*60)
+            return 0
+            
+    finally:
+        updater.db.disconnect()
+
+
+def run_theme_update(config_file: str, theme_id: int = None):
+    """执行法律主题阅读量更新"""
+    logger.info("🎯 法律主题更新模式")
+    
+    updater = ThemeReadingUpdater(config_file)
+    
+    if theme_id:
+        logger.info(f"强制更新主题ID: {theme_id}")
+    
+    success = updater.run_theme_update(force_theme_id=theme_id)
+    
+    if success:
+        logger.success("✅ 法律主题更新任务执行成功")
+        return 0
+    else:
+        logger.error("❌ 法律主题更新任务执行失败")
+        return 1
+
+
+def list_themes(config_file: str):
+    """列出所有活动的法律主题"""
+    logger.info("📋 法律主题列表模式")
+    
+    updater = ThemeReadingUpdater(config_file)
+    themes = updater.list_active_themes()
+    
+    if not themes:
+        print("\n没有找到活动中的法律主题")
+        return 0
+    
+    print("\n" + "="*100)
+    print("📋 活动中的法律主题")
+    print("="*100)
+    print(f"{'ID':<5} {'年份':<6} {'主题名称':<40} {'开始日期':<12} {'结束日期':<12} {'报告':<6}")
+    print("-"*100)
+    
+    for theme in themes:
+        theme_id = theme['id']
+        year = theme['year']
+        name = theme['theme_name'][:38] + '...' if len(theme['theme_name']) > 40 else theme['theme_name']
+        start = str(theme['start_date'])
+        end = str(theme['end_date'])
+        generated = '已生成' if theme['is_generated'] else '未生成'
+        
+        print(f"{theme_id:<5} {year:<6} {name:<40} {start:<12} {end:<12} {generated:<6}")
+    
+    print("="*100)
+    print(f"共 {len(themes)} 个活动主题\n")
+    
+    return 0
+
+
 def dry_run(config_file: str, days: int = None):
     """试运行模式"""
     logger.info("🔍 试运行模式 - 只查询不更新")
@@ -150,22 +248,54 @@ def dry_run(config_file: str, days: int = None):
         return 1
     
     try:
-        articles = updater.get_articles_need_update(days)
+        # 第一步：获取近N天阅读量为空的文章
+        logger.info("\n" + "="*50)
+        logger.info("📝 第一步：查询近7天内阅读量为空的文章")
+        logger.info("="*50)
+        empty_articles = updater.get_articles_need_update(days, only_empty=True)
         
-        if not articles:
-            logger.info("没有需要更新的文章")
+        # 第二步：获取前6天的文章
+        six_days_ago = datetime.now() - timedelta(days=6)
+        logger.info("\n" + "="*50)
+        logger.info(f"📅 第二步：查询往前推6天的文章 (发布日期: {six_days_ago.strftime('%Y-%m-%d')})")
+        logger.info("="*50)
+        six_days_ago_articles = updater.get_articles_for_specific_day(six_days_ago)
+        
+        # 合并并去重
+        all_articles = empty_articles.copy() if empty_articles else []
+        existing_article_ids = {article['article_id'] for article in all_articles}
+        
+        additional_count = 0
+        for article in six_days_ago_articles:
+            if article['article_id'] not in existing_article_ids:
+                all_articles.append(article)
+                existing_article_ids.add(article['article_id'])
+                additional_count += 1
+        
+        if not all_articles:
+            logger.info("\n没有需要更新的文章")
             return 0
         
-        logger.info(f"找到 {len(articles)} 篇需要更新的文章:")
+        logger.info("\n" + "="*50)
+        logger.info("📊 更新任务汇总")
+        logger.info("="*50)
+        logger.info(f"近{days if days else updater.days_to_check}天阅读量为空: {len(empty_articles)} 篇")
+        logger.info(f"往前推6天({six_days_ago.strftime('%Y-%m-%d')}): {len(six_days_ago_articles)} 篇")
+        logger.info(f"去重后实际需要更新: {len(all_articles)} 篇")
+        logger.info(f"  - 其中来自近7天为空: {len(empty_articles)} 篇")
+        logger.info(f"  - 其中来自前6天额外: {additional_count} 篇")
+        logger.info("")
         
         # 显示前10篇文章信息
-        for i, article in enumerate(articles[:10], 1):
+        logger.info("前10篇待更新文章:")
+        for i, article in enumerate(all_articles[:10], 1):
             publish_time = article['publish_time'].strftime('%Y-%m-%d %H:%M')
             title = article['article_title'][:40] + "..." if len(article['article_title']) > 40 else article['article_title']
-            logger.info(f"  {i:2d}. {title} ({publish_time}) - {article['unit_name']}")
+            has_data = "有数据" if article.get('view_count') is not None else "为空"
+            logger.info(f"  {i:2d}. {title} ({publish_time}) [{has_data}] - {article['unit_name']}")
         
-        if len(articles) > 10:
-            logger.info(f"  ... 还有 {len(articles) - 10} 篇文章")
+        if len(all_articles) > 10:
+            logger.info(f"  ... 还有 {len(all_articles) - 10} 篇文章")
         
         return 0
         
@@ -188,6 +318,10 @@ def main():
   %(prog)s --test-api               # 测试API连接
   %(prog)s --dry-run                # 试运行(只查询不更新)
   %(prog)s --dry-run --days 3       # 试运行查询近3天文章
+  %(prog)s --check-theme            # 检查明天是否有法律主题结束
+  %(prog)s --theme-update           # 执行法律主题更新任务
+  %(prog)s --theme-update --theme-id 10  # 强制更新指定主题
+  %(prog)s --list-themes            # 列出所有活动的法律主题
         """
     )
     
@@ -198,6 +332,9 @@ def main():
     mode_group.add_argument("--stats", action="store_true", help="显示统计信息")
     mode_group.add_argument("--test-api", action="store_true", help="测试API连接")
     mode_group.add_argument("--dry-run", action="store_true", help="试运行模式(只查询不更新)")
+    mode_group.add_argument("--check-theme", action="store_true", help="检查明天是否有法律主题结束")
+    mode_group.add_argument("--theme-update", action="store_true", help="执行法律主题阅读量更新")
+    mode_group.add_argument("--list-themes", action="store_true", help="列出所有活动的法律主题")
     
     # 通用选项
     parser.add_argument("--config", default="reading_updater_config.json", help="配置文件路径")
@@ -206,6 +343,9 @@ def main():
     # 调度器选项
     parser.add_argument("--hour", type=int, default=6, help="定时执行的小时 (0-23)")
     parser.add_argument("--minute", type=int, default=0, help="定时执行的分钟 (0-59)")
+    
+    # 法律主题选项
+    parser.add_argument("--theme-id", type=int, help="强制更新指定主题ID（测试用）")
     
     args = parser.parse_args()
     
@@ -230,6 +370,12 @@ def main():
             return test_api_connection(args.config)
         elif args.dry_run:
             return dry_run(args.config, args.days)
+        elif args.check_theme:
+            return check_theme_end(args.config)
+        elif args.theme_update:
+            return run_theme_update(args.config, args.theme_id)
+        elif args.list_themes:
+            return list_themes(args.config)
     except KeyboardInterrupt:
         logger.info("用户中断程序")
         return 0

@@ -16,6 +16,7 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 from article_reading_updater import ArticleReadingUpdater
+from theme_reading_updater import ThemeReadingUpdater
 from spider.log.utils import logger
 
 
@@ -31,6 +32,7 @@ class ReadingUpdateScheduler:
         """
         self.config_file = config_file
         self.updater = ArticleReadingUpdater(config_file)
+        self.theme_updater = ThemeReadingUpdater(config_file)
         self.running = False
         self.scheduler_thread = None
         
@@ -82,8 +84,38 @@ class ReadingUpdateScheduler:
             start_time = datetime.now()
             logger.info(f"任务开始时间: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
             
-            # 执行更新任务
-            success = self.updater.run_update()
+            # 第一步：检查是否有即将结束的法律主题月
+            logger.info("\n" + "="*60)
+            logger.info("🎯 第一步：检查法律主题月")
+            logger.info("="*60)
+            
+            theme_success = False
+            if self.theme_updater.db.connect():
+                theme = self.theme_updater.get_upcoming_theme_end()
+                self.theme_updater.db.disconnect()
+                
+                if theme:
+                    logger.info(f"检测到即将结束的法律主题: {theme['theme_name']}")
+                    logger.info(f"主题时间范围: {theme['start_date']} 到 {theme['end_date']}")
+                    logger.info("开始更新主题期间的普法文章阅读量...")
+                    
+                    theme_success = self.theme_updater.run_theme_update()
+                    
+                    if theme_success:
+                        logger.success("✅ 法律主题月阅读量更新成功")
+                    else:
+                        logger.warning("⚠️ 法律主题月阅读量更新失败")
+                else:
+                    logger.info("今天不是法律主题结束前一天，跳过主题更新")
+            else:
+                logger.error("无法连接数据库检查法律主题")
+            
+            # 第二步：执行常规的阅读量更新任务
+            logger.info("\n" + "="*60)
+            logger.info("📝 第二步：执行常规阅读量更新")
+            logger.info("="*60)
+            
+            regular_success = self.updater.run_update()
             
             # 记录任务结束时间
             end_time = datetime.now()
@@ -92,8 +124,11 @@ class ReadingUpdateScheduler:
             logger.info(f"任务结束时间: {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
             logger.info(f"执行耗时: {duration}")
             
-            if success:
-                logger.success("✅ 定时任务执行成功")
+            # 汇总结果
+            if theme and theme_success and regular_success:
+                logger.success("✅ 定时任务执行成功（含法律主题更新）")
+            elif regular_success:
+                logger.success("✅ 定时任务执行成功（仅常规更新）")
             else:
                 logger.error("❌ 定时任务执行失败")
             
