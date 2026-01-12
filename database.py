@@ -18,7 +18,7 @@ from typing import Dict, List, Optional
 class DatabaseManager:
     """数据库管理器"""
     
-    def __init__(self, host='127.0.0.1', port=3306, user='root', password='123456', database='faxuan'):
+    def __init__(self, host='10.189.91.3', port=9527, user='root', password='FlXc/2025*', database='faxuan'):
         """
         初始化数据库管理器
         
@@ -47,7 +47,11 @@ class DatabaseManager:
                 password=self.password,
                 database=self.database,
                 charset='utf8mb4',
-                cursorclass=pymysql.cursors.DictCursor
+                cursorclass=pymysql.cursors.DictCursor,
+                autocommit=True,
+                connect_timeout=30,
+                read_timeout=60,
+                write_timeout=60
             )
             logger.success(f"成功连接到数据库 {self.database}")
             # 加载单位名称映射
@@ -56,6 +60,31 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"数据库连接失败: {e}")
             return False
+    
+    def ensure_connection(self):
+        """确保数据库连接有效，如果断开则自动重连"""
+        try:
+            if self.connection is None:
+                logger.warning("数据库连接为空，正在重新连接...")
+                return self.connect()
+            
+            # 尝试ping数据库来检测连接是否有效
+            self.connection.ping(reconnect=True)
+            return True
+        except Exception as e:
+            logger.warning(f"数据库连接已断开 ({e})，正在重新连接...")
+            try:
+                # 尝试关闭旧连接
+                if self.connection:
+                    try:
+                        self.connection.close()
+                    except:
+                        pass
+                # 重新连接
+                return self.connect()
+            except Exception as e2:
+                logger.error(f"重新连接数据库失败: {e2}")
+                return False
     
     def load_unit_mapping(self):
         """从数据库加载公众号到单位名称的映射"""
@@ -123,6 +152,11 @@ class DatabaseManager:
             bool: 如果文章存在返回True，否则返回False
         """
         try:
+            # 确保数据库连接有效
+            if not self.ensure_connection():
+                logger.error("数据库连接失败，无法检查文章URL")
+                return False
+            
             with self.connection.cursor() as cursor:
                 sql = "SELECT id FROM fx_article_records WHERE article_url = %s LIMIT 1"
                 cursor.execute(sql, (article_url,))
@@ -130,6 +164,16 @@ class DatabaseManager:
                 return result is not None
         except Exception as e:
             logger.error(f"检查文章URL是否存在时出错: {e}")
+            # 尝试重连后再次执行
+            if self.ensure_connection():
+                try:
+                    with self.connection.cursor() as cursor:
+                        sql = "SELECT id FROM fx_article_records WHERE article_url = %s LIMIT 1"
+                        cursor.execute(sql, (article_url,))
+                        result = cursor.fetchone()
+                        return result is not None
+                except Exception as e2:
+                    logger.error(f"重试检查文章URL时仍然出错: {e2}")
             return False
     
     def check_article_exists_by_title(self, title: str, unit_name: str, publish_time: datetime = None) -> bool:
@@ -146,6 +190,11 @@ class DatabaseManager:
             bool: 如果文章存在返回True，否则返回False
         """
         try:
+            # 确保数据库连接有效
+            if not self.ensure_connection():
+                logger.error("数据库连接失败，无法检查文章标题")
+                return False
+            
             with self.connection.cursor() as cursor:
                 # 计算7天前的时间
                 from datetime import timedelta
@@ -164,6 +213,22 @@ class DatabaseManager:
                 return result is not None
         except Exception as e:
             logger.error(f"检查文章标题是否存在时出错: {e}")
+            # 尝试重连后再次执行
+            if self.ensure_connection():
+                try:
+                    with self.connection.cursor() as cursor:
+                        from datetime import timedelta
+                        seven_days_ago = datetime.now() - timedelta(days=7)
+                        sql = """SELECT id, publish_time FROM fx_article_records 
+                                 WHERE article_title = %s 
+                                 AND unit_name = %s 
+                                 AND publish_time >= %s 
+                                 LIMIT 1"""
+                        cursor.execute(sql, (title, unit_name, seven_days_ago))
+                        result = cursor.fetchone()
+                        return result is not None
+                except Exception as e2:
+                    logger.error(f"重试检查文章标题时仍然出错: {e2}")
             return False
     
     def insert_article(self, article_data: Dict) -> bool:
@@ -213,6 +278,11 @@ class DatabaseManager:
                 return False
             
             article_id = self.generate_article_id(publish_time)
+            
+            # 确保数据库连接有效
+            if not self.ensure_connection():
+                logger.error("数据库连接失败，无法插入文章")
+                return False
             
             with self.connection.cursor() as cursor:
                 sql = """
@@ -265,8 +335,13 @@ class DatabaseManager:
                 
         except Exception as e:
             logger.error(f"插入文章到数据库时出错: {e}")
-            if self.connection:
-                self.connection.rollback()
+            # 尝试重连后再次执行
+            if self.ensure_connection():
+                try:
+                    if self.connection:
+                        self.connection.rollback()
+                except:
+                    pass
             return False
     
     def batch_insert_articles(self, articles: List[Dict]) -> int:
@@ -299,6 +374,11 @@ class DatabaseManager:
             List[Dict]: 文章列表
         """
         try:
+            # 确保数据库连接有效
+            if not self.ensure_connection():
+                logger.error("数据库连接失败，无法获取最新文章")
+                return []
+            
             with self.connection.cursor() as cursor:
                 sql = """
                 SELECT * FROM fx_article_records 
@@ -331,6 +411,11 @@ class DatabaseManager:
         try:
             if finished_date is None:
                 finished_date = datetime.now()
+            
+            # 确保数据库连接有效
+            if not self.ensure_connection():
+                logger.error("数据库连接失败，无法记录爬虫完成时间")
+                return False
             
             with self.connection.cursor() as cursor:
                 # 先删除所有现有记录
@@ -377,6 +462,11 @@ class DatabaseManager:
             Optional[Dict]: 最新的爬虫循环记录，如果没有记录返回None
         """
         try:
+            # 确保数据库连接有效
+            if not self.ensure_connection():
+                logger.error("数据库连接失败，无法获取爬虫循环记录")
+                return None
+            
             with self.connection.cursor() as cursor:
                 sql = "SELECT * FROM fx_crawl_exception LIMIT 1"
                 cursor.execute(sql)

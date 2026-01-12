@@ -101,9 +101,9 @@ class ThemeReadingUpdater:
         # 计算明天的日期
         tomorrow = check_date.date() + timedelta(days=1)
         
-        # 确保数据库已连接
-        if not self.db.connection:
-            logger.error("数据库未连接，无法查询主题")
+        # 确保数据库连接有效
+        if not self.db.ensure_connection():
+            logger.error("数据库连接失败，无法查询主题")
             return None
         
         try:
@@ -151,9 +151,9 @@ class ThemeReadingUpdater:
         Returns:
             List[Dict]: 该期间发布的普法文章列表
         """
-        # 确保数据库已连接
-        if not self.db.connection:
-            logger.error("数据库未连接，无法查询文章")
+        # 确保数据库连接有效
+        if not self.db.ensure_connection():
+            logger.error("数据库连接失败，无法查询文章")
             return []
         
         try:
@@ -222,6 +222,11 @@ class ThemeReadingUpdater:
             
             if not success:
                 logger.warning(f"获取文章数据失败: {error}")
+                return False
+            
+            # 确保数据库连接有效
+            if not self.db.ensure_connection():
+                logger.error("数据库连接失败，无法更新文章数据")
                 return False
             
             # 更新数据库
@@ -396,7 +401,8 @@ class ThemeReadingUpdater:
         Returns:
             List[Dict]: 活动主题列表
         """
-        if not self.db.connect():
+        # 确保数据库连接有效
+        if not self.db.ensure_connection():
             logger.error("数据库连接失败")
             return []
         

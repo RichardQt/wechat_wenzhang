@@ -111,9 +111,9 @@ class ArticleReadingUpdater:
         if days is None:
             days = self.days_to_check
         
-        # 确保数据库已连接
-        if not self.db.connection:
-            logger.error("数据库未连接，无法查询文章")
+        # 确保数据库连接有效
+        if not self.db.ensure_connection():
+            logger.error("数据库连接失败，无法查询文章")
             return []
             
         try:
@@ -183,9 +183,9 @@ class ArticleReadingUpdater:
         Returns:
             List[Dict]: 该日期发布的文章列表
         """
-        # 确保数据库已连接
-        if not self.db.connection:
-            logger.error("数据库未连接，无法查询文章")
+        # 确保数据库连接有效
+        if not self.db.ensure_connection():
+            logger.error("数据库连接失败，无法查询文章")
             return []
             
         try:
@@ -254,6 +254,11 @@ class ArticleReadingUpdater:
             
             if not success:
                 logger.warning(f"获取文章数据失败: {error}")
+                return False
+            
+            # 确保数据库连接有效
+            if not self.db.ensure_connection():
+                logger.error("数据库连接失败，无法更新文章数据")
                 return False
             
             # 更新数据库
@@ -438,7 +443,9 @@ class ArticleReadingUpdater:
             Dict: 统计信息
         """
         try:
-            if not self.db.connect():
+            # 确保数据库连接有效
+            if not self.db.ensure_connection():
+                logger.error("数据库连接失败，无法获取统计信息")
                 return {}
             
             with self.db.connection.cursor() as cursor:
